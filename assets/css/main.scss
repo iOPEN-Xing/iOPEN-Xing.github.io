@@ -91,3 +91,62 @@
 .resume-placeholder {
   color: #777;
 }
+
+.resume-entry {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  gap: .85rem;
+  align-items: start;
+  margin: 1rem 0 1.4rem;
+}
+
+.resume-entry--no-logo {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.resume-entry__logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  margin-top: .15rem;
+}
+
+.resume-entry h3 {
+  margin-top: 0;
+}
+
+.resume-entry .resume-meta {
+  margin-top: .2rem;
+}
+
+.resume-competition-list {
+  padding-left: 0;
+  list-style: none;
+}
+
+.resume-competition-list li {
+  display: grid;
+  grid-template-columns: 8.5rem minmax(0, 1fr) 6.5rem;
+  gap: .8rem;
+  margin: .45rem 0;
+  line-height: 1.55;
+}
+
+.resume-competition-list span:first-child,
+.resume-competition-list span:last-child {
+  color: #555;
+}
+
+@media (max-width: 600px) {
+  .resume-entry {
+    grid-template-columns: 44px minmax(0, 1fr);
+    gap: .7rem;
+  }
+
+  .resume-competition-list li {
+    grid-template-columns: 1fr;
+    gap: .05rem;
+    padding-bottom: .45rem;
+    border-bottom: 1px solid #eee;
+  }
+}
