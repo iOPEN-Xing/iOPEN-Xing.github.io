@@ -76,16 +76,23 @@
 
 .resume-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-  gap: .45rem 1.25rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .45rem 1.6rem;
   margin: .75rem 0 1.25rem;
   padding: 0;
   list-style: none;
 }
 
 .resume-facts li {
+  display: flex;
+  gap: .35rem;
   margin: 0;
   line-height: 1.65;
+  white-space: nowrap;
+}
+
+.resume-facts strong {
+  flex: 0 0 auto;
 }
 
 .resume-placeholder {
@@ -94,8 +101,8 @@
 
 .resume-entry {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
-  gap: .85rem;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 1rem;
   align-items: start;
   margin: 1rem 0 1.4rem;
 }
@@ -105,8 +112,8 @@
 }
 
 .resume-entry__logo {
-  width: 44px;
-  height: 44px;
+  width: 58px;
+  height: 58px;
   object-fit: contain;
   margin-top: .15rem;
 }
@@ -137,10 +144,45 @@
   color: #555;
 }
 
+.resume-company-heading {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  margin: 0 0 .25rem;
+}
+
+.resume-company-heading img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+  flex: 0 0 auto;
+}
+
+.resume-company-heading h3 {
+  margin: 0;
+}
+
+.resume-company-entry {
+  margin: 1.35rem 0 1.75rem;
+}
+
 @media (max-width: 600px) {
+  .resume-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-facts li {
+    white-space: normal;
+  }
+
   .resume-entry {
-    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: 52px minmax(0, 1fr);
     gap: .7rem;
+  }
+
+  .resume-entry__logo {
+    width: 46px;
+    height: 46px;
   }
 
   .resume-competition-list li {

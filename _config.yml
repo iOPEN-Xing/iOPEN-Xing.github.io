@@ -10,7 +10,7 @@ locale                   : "zh-CN"
 title                    : "邢介政"
 title_separator          : "-"
 name                     : "邢介政"
-description              : "应聘大模型算法实习生，关注大模型训练、推理优化、智能客服对齐与金融推理。"
+description              : "算法工程师候选人，关注 LLM post train、Agentic RL、Agentic 数据合成与 Agent 开发。"
 url                      :  # the base hostname & protocol for your site e.g. "https://mmistakes.github.io"
 baseurl                  : "" # the subpath of your site, e.g. "/blog"
 repository               : 
@@ -82,7 +82,7 @@ analytics:
 author:
   name             : "邢介政"
   avatar           : "profile.jpg"
-  bio              : "应聘岗位：大模型算法实习生"
+  bio              : "应聘岗位：算法工程师"
   location         : "山东省济南市"
   employer         :
   phone            : "17709836681"
