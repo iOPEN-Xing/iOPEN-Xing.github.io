@@ -1,0 +1,13 @@
+# main links links
+main:
+  - title: "主页"
+    url: /
+
+  - title: "经历"
+    url: /experience/
+
+  - title: "项目"
+    url: /projects/
+
+  - title: "背景"
+    url: /background/

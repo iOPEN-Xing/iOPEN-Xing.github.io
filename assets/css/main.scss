@@ -1,0 +1,93 @@
+---
+---
+
+/*
+ *    Minimal Mistakes Jekyll Theme
+ *
+ *  - Michael Rose
+ *  - mademistakes.com
+ *  - https://twitter.com/mmistakes
+ *
+*/
+
+@import "vendor/breakpoint/breakpoint"; // media query mixins
+@import "variables";
+@import "mixins";
+@import "vendor/susy/susy";
+
+@import "reset";
+@import "base";
+
+@import "utilities";
+@import "animations";
+@import "tables";
+@import "buttons";
+@import "notices";
+@import "masthead";
+@import "navigation";
+@import "footer";
+@import "syntax";
+
+@import "forms";
+
+@import "page";
+@import "archive";
+@import "sidebar";
+
+@import "vendor/font-awesome/fontawesome";
+@import "vendor/font-awesome/solid";
+@import "vendor/font-awesome/brands";
+@import "vendor/magnific-popup/magnific-popup";
+@import "print";
+
+.resume-logo-strip {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 1.5rem;
+}
+
+.resume-logo-strip img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.resume-org-logo {
+  float: right;
+  width: 52px;
+  height: 52px;
+  object-fit: contain;
+  margin-left: 1rem;
+  margin-bottom: .5rem;
+}
+
+.resume-meta {
+  margin: .35rem 0 1rem;
+  color: #555;
+  font-size: .92em;
+  line-height: 1.75;
+}
+
+.resume-meta strong {
+  color: #333;
+}
+
+.resume-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: .45rem 1.25rem;
+  margin: .75rem 0 1.25rem;
+  padding: 0;
+  list-style: none;
+}
+
+.resume-facts li {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.resume-placeholder {
+  color: #777;
+}

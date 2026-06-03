@@ -1,0 +1,14 @@
+{% include base_path %}
+
+<div class="page__footer-follow">
+  <ul class="social-icons">
+    {% if site.author.email %}
+      <li><a href="mailto:{{ site.author.email }}"><i class="fas fa-fw fa-envelope" aria-hidden="true"></i> 邮箱</a></li>
+    {% endif %}
+    {% if site.author.phone %}
+      <li><i class="fas fa-fw fa-phone" aria-hidden="true"></i> {{ site.author.phone }}</li>
+    {% endif %}
+  </ul>
+</div>
+
+<div class="page__footer-copyright">&copy; {{ site.time | date: '%Y' }} {{ site.name | default: site.title }}. Built with <a href="http://jekyllrb.com" rel="nofollow">Jekyll</a> and <a href="https://mademistakes.com/work/minimal-mistakes-jekyll-theme/" rel="nofollow">Minimal Mistakes</a>.</div>
