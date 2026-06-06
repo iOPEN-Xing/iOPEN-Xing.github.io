@@ -1,0 +1,1727 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TokenSkip 论文精读：可控 Chain-of-Thought 压缩</title>
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [["\\(", "\\)"]],
+        displayMath: [["\\[", "\\]"]],
+        processEscapes: true
+      },
+      svg: { fontCache: "global" }
+    };
+  </script>
+  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #faf4e7;
+      --surface: #fffaf1;
+      --surface-2: #f1e6d2;
+      --surface-3: #f7edda;
+      --ink: #2c241a;
+      --muted: #665a49;
+      --subtle: #8e806d;
+      --line: #e2d4bd;
+      --teal: #a57147;
+      --teal-dark: #7b5235;
+      --coral: #b96a55;
+      --amber: #c1914d;
+      --blue: #6f8794;
+      --violet: #8a748b;
+      --green: #a77a3f;
+      --shadow: 0 10px 30px rgba(93, 64, 39, 0.08);
+      --radius: 8px;
+      --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --sans: Inter, "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      overflow-x: hidden;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--sans);
+      color: var(--ink);
+      background:
+        linear-gradient(180deg, rgba(250, 244, 231, 0.96), rgba(246, 237, 221, 0.92) 280px),
+        var(--paper);
+      line-height: 1.78;
+      font-size: 16px;
+      letter-spacing: 0;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: var(--teal-dark);
+      text-decoration-color: rgba(165, 113, 71, 0.38);
+      text-underline-offset: 3px;
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+    }
+
+    .page {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 0 24px 80px;
+    }
+
+    .hero {
+      min-height: 94vh;
+      display: grid;
+      align-items: center;
+      padding: 44px 0 34px;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
+      gap: 44px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: rgba(255, 250, 241, 0.84);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .tag.strong {
+      background: var(--teal);
+      border-color: var(--teal);
+      color: #fff;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 820px;
+      font-size: clamp(34px, 5.2vw, 64px);
+      line-height: 1.08;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      margin: 22px 0 0;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.9;
+    }
+
+    .paper-meta {
+      display: grid;
+      gap: 6px;
+      margin-top: 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .hero-panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .hero-panel-top {
+      padding: 20px 20px 8px;
+    }
+
+    .hero-panel h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      line-height: 1.35;
+    }
+
+    .thesis-list {
+      display: grid;
+      gap: 12px;
+      margin: 16px 0 0;
+    }
+
+    .thesis-item {
+      display: grid;
+      grid-template-columns: 86px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 13px 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff8eb;
+    }
+
+    .thesis-label {
+      color: var(--teal-dark);
+      font-size: 12px;
+      font-weight: 850;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .thesis-item p {
+      margin: 0;
+      color: #3a3023;
+      line-height: 1.7;
+      font-size: 14px;
+    }
+
+    .mini-flow {
+      padding: 18px;
+      background: linear-gradient(180deg, #fff8eb, #f1e6d2);
+      border-top: 1px solid var(--line);
+    }
+
+    .flow-row {
+      display: grid;
+      grid-template-columns: 0.65fr 48px 0.65fr;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 0;
+    }
+
+    .flow-box {
+      min-height: 72px;
+      display: grid;
+      align-content: center;
+      gap: 8px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .flow-title {
+      font-size: 12px;
+      color: var(--subtle);
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .tokens {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .tok {
+      width: 18px;
+      height: 18px;
+      border-radius: 3px;
+      background: #dfe7e4;
+      border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .tok.hot { background: #d15b4a; }
+    .tok.mid { background: #e9a94f; }
+    .tok.keep { background: #8f9b65; }
+    .tok.skip {
+      background:
+        linear-gradient(45deg, transparent 42%, #65706d 42%, #65706d 58%, transparent 58%),
+        #f2eadc;
+    }
+
+    .arrow {
+      display: grid;
+      place-items: center;
+      color: var(--teal);
+      font-size: 34px;
+      font-weight: 800;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+
+    .metric {
+      padding: 15px 14px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--line);
+    }
+
+    .metric .value {
+      display: block;
+      font-family: var(--mono);
+      font-size: 25px;
+      line-height: 1.15;
+      font-weight: 800;
+      color: var(--teal-dark);
+    }
+
+    .metric .label {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .nav-wrap {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      margin: 0 -24px 48px;
+      padding: 0 24px;
+      background: rgba(247, 249, 246, 0.92);
+      border-top: 1px solid rgba(217, 227, 223, 0.8);
+      border-bottom: 1px solid rgba(217, 227, 223, 0.95);
+      backdrop-filter: blur(14px);
+    }
+
+    nav {
+      max-width: 1120px;
+      margin: 0 auto;
+      display: flex;
+      gap: 22px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding: 13px 0;
+    }
+
+    nav::-webkit-scrollbar {
+      display: none;
+    }
+
+    nav a {
+      white-space: nowrap;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    nav a:hover {
+      color: var(--teal-dark);
+    }
+
+    section {
+      margin: 0 0 72px;
+      scroll-margin-top: 80px;
+    }
+
+    .section-head {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    .kicker {
+      color: var(--teal-dark);
+      font-size: 13px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(26px, 3vw, 38px);
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+
+    h3 {
+      margin: 30px 0 12px;
+      font-size: 21px;
+      line-height: 1.35;
+      letter-spacing: 0;
+    }
+
+    p {
+      margin: 0 0 16px;
+    }
+
+    .lead {
+      max-width: 860px;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1.9;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 0.44fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .note {
+      border-left: 4px solid var(--teal);
+      background: var(--surface);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      padding: 20px 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .note strong {
+      color: var(--teal-dark);
+    }
+
+    .callout {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .callout h3 {
+      margin-top: 0;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .three-col {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .card h3,
+    .card h4 {
+      margin-top: 0;
+      margin-bottom: 9px;
+    }
+
+    .card p:last-child,
+    .note p:last-child,
+    .callout p:last-child {
+      margin-bottom: 0;
+    }
+
+    .fig {
+      margin: 24px 0;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      position: relative;
+    }
+
+    .fig img {
+      width: 100%;
+      background: #fff;
+      cursor: zoom-in;
+      transition: transform 0.18s ease, filter 0.18s ease;
+    }
+
+    .fig img:hover {
+      filter: saturate(1.05) contrast(1.02);
+      transform: scale(1.005);
+    }
+
+    .figcap {
+      padding: 12px 16px 15px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+      border-top: 1px solid var(--line);
+      background: #fff8eb;
+    }
+
+    .figcap::after {
+      content: "点击图片可放大";
+      display: inline-flex;
+      margin-left: 10px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(165, 113, 71, 0.12);
+      color: var(--teal-dark);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .figure-pair {
+      display: grid;
+      grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+      gap: 18px;
+      align-items: stretch;
+      margin: 24px 0;
+    }
+
+    .figure-pair.figure-stack {
+      grid-template-columns: 1fr;
+    }
+
+    .figure-pair.figure-stack .paper-map {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .figure-pair.figure-stack .fig {
+      margin: 0;
+    }
+
+    .figure-pair.figure-stack .fig img {
+      width: min(100%, 1040px);
+      margin: 0 auto;
+    }
+
+    .figure-pair.figure-stack .fig img[src*="fig1_tokenskip_overview"] {
+      width: min(100%, 760px);
+    }
+
+    .paper-map {
+      display: grid;
+      gap: 12px;
+    }
+
+    .map-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .map-card h3 {
+      margin: 0 0 7px;
+      font-size: 18px;
+    }
+
+    .map-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.75;
+    }
+
+    .figure-ref {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 8px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: rgba(165, 113, 71, 0.12);
+      color: var(--teal-dark);
+      font-size: 12px;
+      font-weight: 850;
+    }
+
+    .method-steps {
+      display: grid;
+      gap: 14px;
+      margin-top: 22px;
+      counter-reset: method;
+    }
+
+    .step {
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 16px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .step .anchor-note {
+      display: inline-flex;
+      margin-bottom: 10px;
+      color: var(--teal-dark);
+      font-size: 12px;
+      font-weight: 850;
+      text-transform: uppercase;
+    }
+
+    .step::before {
+      counter-increment: method;
+      content: counter(method);
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--teal);
+      color: #fff;
+      font-family: var(--mono);
+      font-weight: 800;
+    }
+
+    .formula {
+      margin: 14px 0;
+      padding: 15px 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff8eb;
+      color: #22312f;
+      overflow-x: auto;
+      line-height: 1.8;
+      font-size: 14px;
+    }
+
+    .formula-note {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.65;
+      margin-top: 8px;
+    }
+
+    .compare-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+
+    .compare-item {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fffaf1;
+      padding: 15px 16px;
+    }
+
+    .compare-item strong {
+      color: var(--teal-dark);
+    }
+
+    .lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 999;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      background: rgba(8, 17, 15, 0.78);
+    }
+
+    .lightbox.open {
+      display: flex;
+    }
+
+    .lightbox-inner {
+      width: min(1180px, 96vw);
+      max-height: 92vh;
+      display: grid;
+      gap: 10px;
+    }
+
+    .lightbox img {
+      max-height: 82vh;
+      width: auto;
+      max-width: 100%;
+      margin: 0 auto;
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
+    }
+
+    .lightbox-caption {
+      color: #eef7f4;
+      font-size: 14px;
+      line-height: 1.65;
+      text-align: center;
+    }
+
+    .lightbox-close {
+      position: fixed;
+      top: 18px;
+      right: 20px;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      width: 42px;
+      height: 42px;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .heat-demo {
+      padding: 18px;
+      border-radius: var(--radius);
+      background: #fff;
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .heat-line {
+      line-height: 2.25;
+      font-size: 16px;
+    }
+
+    .heat {
+      border-radius: 5px;
+      padding: 2px 4px;
+      margin: 0 1px;
+    }
+
+    .heat.low { background: rgba(97, 112, 108, 0.13); color: #697572; }
+    .heat.mid { background: rgba(197, 146, 44, 0.22); color: #7a5710; }
+    .heat.high { background: rgba(209, 91, 74, 0.25); color: #8d2f22; font-weight: 750; }
+
+    .table-scroll {
+      overflow-x: auto;
+      margin: 20px 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      background: var(--surface);
+    }
+
+    table {
+      width: 100%;
+      min-width: 760px;
+      border-collapse: collapse;
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    th,
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: right;
+      vertical-align: top;
+    }
+
+    th:first-child,
+    td:first-child {
+      text-align: left;
+    }
+
+    th {
+      background: var(--surface-2);
+      color: #253330;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .good {
+      color: var(--green);
+      font-weight: 800;
+    }
+
+    .bad {
+      color: var(--coral);
+      font-weight: 800;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .chart-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .bars {
+      display: grid;
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr) 72px;
+      align-items: center;
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .bar-track {
+      height: 12px;
+      border-radius: 999px;
+      background: #f2eadc;
+      overflow: hidden;
+      border: 1px solid #dbe5e1;
+    }
+
+    .bar {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--teal);
+    }
+
+    .bar.coral { background: var(--coral); }
+    .bar.amber { background: var(--amber); }
+    .bar.blue { background: var(--blue); }
+    .bar.green { background: var(--green); }
+
+    .svg-chart {
+      width: 100%;
+      height: auto;
+      min-height: 250px;
+      overflow: visible;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legend-dot {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      margin-right: 6px;
+      vertical-align: -1px;
+    }
+
+    .case-box {
+      display: grid;
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .case-line {
+      padding: 16px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .case-label {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .compact-text {
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.85;
+      color: #263331;
+    }
+
+    .deleted {
+      color: #8b9a96;
+      text-decoration: line-through;
+      text-decoration-thickness: 2px;
+      text-decoration-color: rgba(209, 91, 74, 0.55);
+    }
+
+    .kept {
+      color: #7b5235;
+      font-weight: 800;
+      background: rgba(165, 113, 71, 0.13);
+      border-radius: 4px;
+      padding: 1px 3px;
+    }
+
+    .judge-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .judge {
+      border-top: 5px solid var(--teal);
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+      box-shadow: var(--shadow);
+    }
+
+    .judge.warn {
+      border-top-color: var(--coral);
+    }
+
+    .judge.ask {
+      border-top-color: var(--amber);
+    }
+
+    .refs {
+      display: grid;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .footer {
+      padding-top: 28px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.95em;
+      color: #24413d;
+      background: rgba(165, 113, 71, 0.12);
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    @media (max-width: 900px) {
+      .hero-grid,
+      .content-grid,
+      .two-col,
+      .three-col,
+      .figure-pair,
+      .judge-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        min-height: auto;
+      }
+
+      .metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 600px) {
+      .page {
+        padding: 0 16px 56px;
+      }
+
+      .nav-wrap {
+        margin-left: -16px;
+        margin-right: -16px;
+        padding: 0 16px;
+      }
+
+      h1 {
+        font-size: 36px;
+      }
+
+      .subtitle,
+      .lead {
+        font-size: 16px;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-row {
+        grid-template-columns: 1fr;
+      }
+
+      .arrow {
+        transform: rotate(90deg);
+      }
+
+      .bar-row {
+        grid-template-columns: 1fr;
+        gap: 6px;
+      }
+
+      .thesis-item,
+      .compare-strip,
+      .figure-pair.figure-stack .paper-map {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="hero" id="top">
+      <div class="hero-grid">
+        <div>
+          <div class="eyebrow">
+            <span class="tag strong">论文精读</span>
+            <span class="tag">CoT 压缩</span>
+            <span class="tag">推理效率</span>
+            <span class="tag">arXiv:2502.12067v3</span>
+          </div>
+          <h1>TokenSkip：训练模型生成更短但仍可控的推理链</h1>
+          <p class="subtitle">
+            长 CoT 能提升复杂推理，但自回归模型必须一个 token 一个 token 地生成，推理越长，延迟和 KV cache 成本越高。
+            TokenSkip 的核心想法是：不要简单要求模型“说短点”，也不要硬截断输出，而是先找出 CoT 里真正承载推理的 token，
+            用这些压缩轨迹微调模型，让它在推理时按给定压缩率 γ 自动生成更短、更高密度的 CoT。
+          </p>
+          <div class="paper-meta">
+            <span><strong>论文：</strong>TokenSkip: Controllable Chain-of-Thought Compression in LLMs</span>
+            <span><strong>作者：</strong>Heming Xia, Chak Tou Leong, Wenjie Wang, Yongqi Li, Wenjie Li</span>
+            <span><strong>单位：</strong>The Hong Kong Polytechnic University; University of Science and Technology of China</span>
+            <span><strong>版本：</strong>PDF metadata 显示 arXiv v3，论文首页日期为 16 Sep 2025</span>
+          </div>
+          <div class="metric-grid" aria-label="核心数字">
+            <div class="metric">
+              <span class="value">40%</span>
+              <span class="label">Qwen2.5-14B 在 GSM8K 上减少推理 token</span>
+            </div>
+            <div class="metric">
+              <span class="value">&lt;0.4</span>
+              <span class="label">同设置下准确率下降小于 0.4 个百分点</span>
+            </div>
+            <div class="metric">
+              <span class="value">1.4x</span>
+              <span class="label">LLaMA-3.1-8B 在 MATH-500 的 0.7 压缩率延迟加速</span>
+            </div>
+            <div class="metric">
+              <span class="value">0.2%</span>
+              <span class="label">Qwen2.5-14B 使用 LoRA 仅训练约 0.2% 参数</span>
+            </div>
+          </div>
+        </div>
+
+        <aside class="hero-panel" aria-label="方法概览">
+          <div class="hero-panel-top">
+            <h2>一句话讲清楚</h2>
+            <div class="thesis-list">
+              <div class="thesis-item">
+                <span class="thesis-label">背景</span>
+                <p>CoT 越长通常越会增加推理成本；在长推理模型里，这个成本会直接变成用户等待时间。</p>
+              </div>
+              <div class="thesis-item">
+                <span class="thesis-label">动机</span>
+                <p>作者观察到 CoT token 重要性不均匀：公式、数字、实体关系更关键，连接词和模板话更冗余。</p>
+              </div>
+              <div class="thesis-item">
+                <span class="thesis-label">方法</span>
+                <p>先用 LLMLingua-2 给 CoT token 打重要性分，按 γ 剪出压缩 CoT，再用这些样本做 LoRA SFT。</p>
+              </div>
+              <div class="thesis-item">
+                <span class="thesis-label">效果</span>
+                <p>Qwen2.5-14B 在 GSM8K 上约减少 40% 推理 token，准确率下降小于 0.4 个百分点。</p>
+              </div>
+            </div>
+          </div>
+          <div class="mini-flow">
+            <div class="flow-row">
+              <div class="flow-box">
+                <span class="flow-title">原始 CoT</span>
+                <div class="tokens">
+                  <span class="tok hot"></span><span class="tok mid"></span><span class="tok"></span><span class="tok hot"></span><span class="tok"></span><span class="tok keep"></span>
+                </div>
+              </div>
+              <div class="arrow">→</div>
+              <div class="flow-box">
+                <span class="flow-title">重要性剪枝</span>
+                <div class="tokens">
+                  <span class="tok hot"></span><span class="tok skip"></span><span class="tok skip"></span><span class="tok hot"></span><span class="tok skip"></span><span class="tok keep"></span>
+                </div>
+              </div>
+            </div>
+            <div class="flow-row">
+              <div class="flow-box">
+                <span class="flow-title">多 γ 训练</span>
+                <code>Q [EOS] γ [EOS] compressed CoT + A</code>
+              </div>
+              <div class="arrow">→</div>
+              <div class="flow-box">
+                <span class="flow-title">可控推理</span>
+                <code>γ = 0.5 / 0.7 / 0.9 / 1.0</code>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </header>
+
+    <div class="nav-wrap">
+      <nav aria-label="章节导航">
+        <a href="#tldr">TL;DR</a>
+        <a href="#problem">问题定位</a>
+        <a href="#method">方法拆解</a>
+        <a href="#experiments">实验读法</a>
+        <a href="#analysis">关键分析</a>
+        <a href="#limits">局限与思考</a>
+        <a href="#takeaways">结论</a>
+      </nav>
+    </div>
+
+    <section id="tldr">
+      <div class="section-head">
+        <span class="kicker">TL;DR</span>
+        <h2>TokenSkip 的贡献：把“少生成 CoT”从提示词愿望变成可训练能力</h2>
+      </div>
+      <div class="note">
+        <p>
+          <strong>如果只用一句话概括：</strong>TokenSkip 认为 CoT 中有一部分 token 是“推理承重结构”，另一部分只是自然语言胶水；
+          它先从目标模型自己的正确 CoT 中剪出高重要性 token，构造不同压缩率的训练数据，再把压缩率 γ 作为条件输入微调模型，
+          让模型学会在推理时主动跳过低价值 token，而不是事后把输出砍短。
+        </p>
+        <p>
+          这篇论文的关键不是“CoT 可以压缩”这个结论本身，而是给了一个可复现的训练路径：目标 LLM 生成正确 CoT
+          → 重要性模型剪枝 → 混合 γ 的 SFT → 推理时按 γ 控制输出长度。实验显示，这条路径比 “Be concise” 这类 prompt 更能贴近目标压缩率，
+          又比 hard truncation 更不容易砍断推理链。
+        </p>
+      </div>
+    </section>
+
+    <section id="problem">
+      <div class="section-head">
+        <span class="kicker">Research Question</span>
+        <h2>论文真正问的问题：能不能少生成 token，但不破坏推理链？</h2>
+        <p class="lead">
+          这篇论文的出发点不是“CoT 太长所以不要 CoT”，而是一个更细的问题：如果长推理确实有用，那么能否把 CoT 中真正必要的推理信息保留下来，
+          同时减少那些对答案贡献较小、但仍要消耗生成时间的 token？
+        </p>
+      </div>
+
+      <div class="content-grid">
+        <div>
+          <h3>为什么“请简洁点”和“直接截断”都不是理想答案</h3>
+          <p>
+            Prompt 路线的问题是<strong>不可控</strong>：模型可能理解“要短”，但未必短到目标比例；论文 Table 1 中 LC-Prompt 目标设为 0.5，
+            在 GSM8K 的实际压缩率仍是 0.89，在 MATH-500 上仍是 0.94。也就是说，它更像改变语气，而不是精确控制长度。
+          </p>
+          <p>
+            截断路线的问题是<strong>破坏结构</strong>：CoT 是自回归生成出来的，答案常常在尾部。如果只限制最大输出长度，最容易砍掉最后的计算和最终答案。
+            论文 Table 1 中 Truncation 在 GSM8K 的 0.5 ratio 下准确率从 86.2 跌到 7.0，这说明“短”本身没有意义，关键是保留哪些 token。
+          </p>
+          <p>
+            TokenSkip 因此把问题改写为：<strong>不是让模型少想几步，而是让每一步用更高密度的符号和关键词表达。</strong>
+            Figure 2 给了这个假设的直观证据：同一条 CoT 中，数字、方程和关键实体关系通常更深色，也就是重要性更高；连接词和模板式自然语言往往更浅。
+          </p>
+
+          <div class="heat-demo" aria-label="Token 重要性示意">
+            <span class="case-label">Token 重要性示意</span>
+            <div class="heat-line">
+              <span class="heat low">Let’s</span>
+              <span class="heat low">break</span>
+              <span class="heat low">it</span>
+              <span class="heat low">down</span>
+              <span class="heat high">Deanna = 26</span>
+              <span class="heat mid">Marcus five younger</span>
+              <span class="heat high">26 - 5 = 21</span>
+              <span class="heat high">Leo = 2 × Marcus</span>
+              <span class="heat high">42</span>
+            </div>
+            <p class="muted" style="margin-top: 12px;">
+              这段示意对应论文 Figure 2：如果问题是年龄推理，真正决定答案的是 “Deanna=26”“26-5=21”“Leo=2×Marcus”“42” 这些关系；
+              “Let’s break it down” 这类开场白可以帮助人读，但对算出答案的贡献较弱。
+            </p>
+          </div>
+        </div>
+
+        <aside>
+          <figure class="fig">
+            <img src="tokenskip_report_assets/crops/fig2_importance_and_recovery.png" alt="论文 Figure 2 和 Figure 3 的裁剪图，展示 token 重要性以及压缩 CoT 恢复。" />
+            <figcaption class="figcap">
+              原论文图示：CoT token 的重要性分布并不均匀；压缩后的 CoT 仍可由 LLM 恢复为完整推理过程。
+            </figcaption>
+          </figure>
+        </aside>
+      </div>
+    </section>
+
+    <section id="method">
+      <div class="section-head">
+        <span class="kicker">Method</span>
+        <h2>TokenSkip 怎么做：把“压缩 CoT”做成一种可学习的输出格式</h2>
+        <p class="lead">
+          先抓住最重要的一点：TokenSkip 不是在模型生成完整 CoT 之后再做后处理，而是在训练阶段把“压缩后的 CoT 长什么样”
+          教给模型。Figure 4 是整篇论文的方法地图，可以从左到右读：生成原始正确 CoT → 压缩器剪枝 → 带 γ 微调 → 推理时直接输出压缩 CoT。
+        </p>
+      </div>
+
+      <div class="figure-pair figure-stack">
+        <figure class="fig">
+          <img src="tokenskip_report_assets/crops/fig4_method_pipeline.png" alt="论文 Figure 4：TokenSkip 训练和推理流程。" />
+          <figcaption class="figcap">
+            Figure 4 是全局路线图：左半边是训练数据构造，右半边是推理时根据 γ 生成压缩 CoT。
+          </figcaption>
+        </figure>
+        <div class="paper-map">
+          <div class="map-card">
+            <span class="figure-ref">Figure 4 左侧：Question → LLM → CoT/Answer</span>
+            <h3>先得到目标模型自己的正确推理</h3>
+            <p>训练样本不是人工重写的短推理，而是目标 LLM 对训练题生成的原始 CoT；只保留答对的轨迹，避免压缩错误推理。</p>
+          </div>
+          <div class="map-card">
+            <span class="figure-ref">Figure 4 中间：Compressor</span>
+            <h3>再把原始 CoT 压成不同 γ</h3>
+            <p>压缩器不是随便删词，而是根据 token importance 保留高价值 token，构造 0.5 到 1.0 不同压缩率的训练目标。</p>
+          </div>
+          <div class="map-card">
+            <span class="figure-ref">Figure 4 右侧：Inference</span>
+            <h3>最后让模型学会按 γ 直接输出</h3>
+            <p>推理时输入问题和目标 γ，模型不再先生成长 CoT 再被压缩，而是直接生成压缩 CoT 和答案。</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="figure-pair figure-stack">
+        <figure class="fig">
+          <img src="tokenskip_report_assets/crops/fig1_tokenskip_overview.png" alt="论文 Figure 1：原始 CoT 顺序生成所有 token，TokenSkip 跳过低重要性 token。" />
+          <figcaption class="figcap">
+            Figure 1 说明 TokenSkip 要学的行为：跳过低重要性 token，并在关键 token 之间建立 shortcut。
+          </figcaption>
+        </figure>
+        <div class="callout">
+          <h3>Figure 1 的真正含义</h3>
+          <p>
+            上半部分的 vanilla CoT 是普通自回归生成：即使某些 token 只是连接词或模板话，也必须顺序生成。
+            下半部分的 TokenSkip 不是把整段推理砍掉，而是先在训练数据中删去低重要性 token，再微调模型，让它学会从一个关键 token
+            直接过渡到下一个关键 token。
+          </p>
+          <p>
+            所以 TokenSkip 的目标不是“少推理”，而是“把推理表达压缩成更密集的语言”。这也解释了为什么 Figure 10 的案例里，
+            数字和公式大多保留下来，但自然语言连接变短。
+          </p>
+        </div>
+      </div>
+
+      <div class="compare-strip">
+        <div class="compare-item">
+          <strong>不是 prompt 控制</strong>
+          <p>Prompt 只能请求“短一点”，无法稳定落到指定压缩率。</p>
+        </div>
+        <div class="compare-item">
+          <strong>不是硬截断</strong>
+          <p>截断会从尾部砍掉还没生成的计算或答案，尤其伤害 GSM8K。</p>
+        </div>
+        <div class="compare-item">
+          <strong>是条件化 SFT</strong>
+          <p>把 γ 和压缩 CoT 一起放进训练，使压缩成为模型学到的输出分布。</p>
+        </div>
+      </div>
+
+      <div class="method-steps">
+        <div class="step">
+          <div>
+            <span class="anchor-note">对应 Figure 4 左侧：Question → LLM → CoT/Answer</span>
+            <h3>生成并过滤 CoT 轨迹</h3>
+            <p>
+              给定训练集 \(D=\{(x,a)\}\) 和目标模型 \(M\)，作者先让 \(M\) 对每道题生成一条完整 CoT \(c\) 和最终答案。
+              只有答案正确的样本会进入下一步。这个过滤很关键：TokenSkip 想学的是“如何压缩正确推理”，不是把错误推理也压缩得更短。
+            </p>
+            <p>
+              这一步也让方法保持低成本：训练目标主要来自目标模型自己的输出，像一种自蒸馏；论文没有要求人工逐条标注压缩 CoT。
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div>
+            <span class="anchor-note">对应 Figure 4 中间 Compressor；动机来自 Figure 2</span>
+            <h3>用重要性模型给 token 排序</h3>
+            <p>
+              压缩器要回答一个局部问题：一条 CoT 里的每个 token 到底有多重要？论文对比了两类重要性度量。
+              Selective Context 用因果 LLM 的困惑度衡量 token 置信度，但它容易受位置影响，句子后部 token 往往更容易预测；
+              TokenSkip 最终采用 LLMLingua-2 的双向 BERT-like 分类器，让模型同时看到左右文，再判断 token 是否重要。
+            </p>
+            <div class="formula">
+              \[
+                I_1(x_i) = -\log P(x_i \mid x_{&lt;i}; \theta_{M_L})
+              \]
+              \[
+                I_2(x_i) = P(\ell_i = 1 \mid x_{\le n}; \theta_{M_B})
+              \]
+            </div>
+            <p class="formula-note">
+              这里 \(I_1\) 是 Selective Context 的困惑度式重要性；\(I_2\) 表示 LLMLingua-2 判断 token \(x_i\)
+              “应被保留”的概率。论文 Eq.(2) 写成 \(P(x_i \mid x_{\le n};\theta_{M_B})\)，语义上就是双向分类器输出的重要性概率。
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div>
+            <span class="anchor-note">对应 Figure 4 中间 Compressor 输出 Compressed CoT</span>
+            <h3>按 γ 保留高重要性 token</h3>
+            <p>
+              现在有了一条 CoT \(c=\{c_i\}_{i=1}^{m}\) 和每个 token 的重要性 \(I(c_i)\)。
+              γ 可以理解为目标保留比例：γ 越小，训练目标越短；γ=1.0 时保留原始 CoT。实现上，TokenSkip 选择一个阈值 \(I_\gamma\)，
+              让高于阈值的 token 被保留下来，得到压缩轨迹 \(\tilde c\)。
+            </p>
+            <div class="formula">
+              \[
+                I_{\gamma} = Q_{\gamma}\big(I(c_1), \ldots, I(c_m)\big)
+              \]
+              \[
+                \tilde c = \{\, c_i \mid I(c_i) \ge I_{\gamma},\; 1 \le i \le m \,\}
+              \]
+            </div>
+            <p class="formula-note">
+              读这两个式子时不要只看符号：它的思想是“用重要性阈值控制输出密度”。模型最后学到的不是删词规则本身，
+              而是这种压缩后 CoT 的语言形态。
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div>
+            <span class="anchor-note">对应 Figure 4 下方 Fine-tune：Input / Target</span>
+            <h3>多压缩率 SFT，答案段不压缩</h3>
+            <p>
+              训练样本里，问题后面会显式插入压缩率 γ：<code>Q [EOS] γ [EOS] compressed CoT + A</code>。
+              这一步是“可控”的来源：模型不是被训练成永远短，而是学会不同 γ 对应不同输出密度。
+              论文还保留一部分 γ=1.0 的原始 CoT，避免模型忘掉完整推理格式。
+            </p>
+            <p>
+              另一个细节是：TokenSkip 只压缩 CoT，不压缩最终答案 \(a\)。这很合理，因为答案段承担评测和用户可见输出，
+              如果把答案也剪掉，压缩就会和任务正确性直接冲突。
+            </p>
+            <div class="formula">
+              \[
+                x_{\text{train}} = (Q,\gamma), \qquad y = \tilde c \oplus a
+              \]
+              \[
+                \mathcal{L}_{\text{NLL}}
+                = -\sum_{i=1}^{l}\log P(y_i \mid x,\gamma,y_{&lt;i};\theta_M)
+              \]
+            </div>
+            <p class="formula-note">
+              这就是常规 next-token SFT，只是训练目标从“完整 CoT + 答案”换成“压缩 CoT + 答案”，并把 γ 作为条件输入。
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div>
+            <span class="anchor-note">对应 Figure 4 右侧 Inference</span>
+            <h3>推理时输入目标 γ</h3>
+            <p>
+              推理阶段没有额外压缩器参与。用户给出问题和想要的 γ，模型按普通自回归方式生成 \(\hat y=\hat c\oplus \hat a\)。
+              这也是 TokenSkip 和“先生成再压缩”的根本区别：节省 token 的收益发生在生成过程中，而不是生成之后。
+            </p>
+            <div class="formula">
+              \[
+                \hat y = \arg\max_{y^*}\sum_{j=1}^{l'}
+                \log P(y_j \mid x,\gamma,y_{&lt;j};\theta_M)
+              \]
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="experiments">
+      <div class="section-head">
+        <span class="kicker">Experiments</span>
+        <h2>实验读法：TokenSkip 最强的证据不是“短”，而是“短得可控”</h2>
+        <p class="lead">
+          作者主要在 GSM8K 和 MATH-500 上评估 LLaMA-3.1-8B-Instruct 与 Qwen2.5-Instruct 系列。
+          指标包括准确率、平均 CoT token 数、单样本推理延迟和实际压缩率。
+        </p>
+      </div>
+
+      <div class="two-col">
+        <figure class="fig">
+          <img src="tokenskip_report_assets/crops/fig5_qwen_scale.png" alt="论文 Figure 5：Qwen2.5 不同规模模型在 GSM8K 上的 token 和准确率关系。" />
+          <figcaption class="figcap">
+            Qwen2.5 系列显示出规模效应：模型越大，越能在高压缩下保持准确率。
+          </figcaption>
+        </figure>
+        <div class="chart-card">
+          <h3>Qwen2.5-14B 的关键结果</h3>
+          <p>
+            在 GSM8K 上，原始 Qwen2.5-14B-Instruct 为 93.1% 准确率、313.11 个平均 CoT token。
+            γ=0.6 时，TokenSkip 为 92.7%、180.68 token，实际比例 0.57；这对应约 40% token 减少，准确率只降 0.4 个百分点。
+          </p>
+          <div class="bars" aria-label="Qwen2.5-14B GSM8K token 数对比">
+            <div class="bar-row">
+              <span>Original</span>
+              <span class="bar-track"><span class="bar" style="width: 100%;"></span></span>
+              <span>313.11</span>
+            </div>
+            <div class="bar-row">
+              <span>γ=0.8</span>
+              <span class="bar-track"><span class="bar green" style="width: 79%;"></span></span>
+              <span>247.24</span>
+            </div>
+            <div class="bar-row">
+              <span>γ=0.6</span>
+              <span class="bar-track"><span class="bar amber" style="width: 58%;"></span></span>
+              <span>180.68</span>
+            </div>
+            <div class="bar-row">
+              <span>γ=0.5</span>
+              <span class="bar-track"><span class="bar coral" style="width: 50%;"></span></span>
+              <span>156.85</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <h3>LLaMA-3.1-8B：和 prompt / truncation 的对照</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>方法</th>
+              <th>Ratio</th>
+              <th>GSM8K Acc</th>
+              <th>GSM8K Tokens</th>
+              <th>GSM8K Latency</th>
+              <th>GSM8K ActRatio</th>
+              <th>MATH-500 Acc</th>
+              <th>MATH Tokens</th>
+              <th>MATH Latency</th>
+              <th>MATH ActRatio</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Original</td><td>-</td><td>86.2</td><td>213.17</td><td>5.96s</td><td>1.00</td><td>48.6</td><td>502.60</td><td>16.37s</td><td>1.00</td>
+            </tr>
+            <tr>
+              <td>BeConcise</td><td>-</td><td>82.9</td><td>161.32</td><td>4.73s</td><td>0.76</td><td>47.4</td><td>471.34</td><td>15.54s</td><td>0.94</td>
+            </tr>
+            <tr>
+              <td>LC-Prompt</td><td>0.5</td><td>83.7</td><td>188.82</td><td>4.97s</td><td class="bad">0.89</td><td>47.8</td><td>471.11</td><td>15.48s</td><td class="bad">0.94</td>
+            </tr>
+            <tr>
+              <td>Truncation</td><td>0.5</td><td class="bad">7.0</td><td>103.69</td><td>2.95s</td><td>0.49</td><td class="bad">27.4</td><td>283.70</td><td>9.40s</td><td>0.56</td>
+            </tr>
+            <tr>
+              <td>TokenSkip</td><td>0.7</td><td>82.5</td><td>150.12</td><td class="good">4.36s</td><td class="good">0.70</td><td>46.7</td><td>349.13</td><td class="good">11.55s</td><td class="good">0.69</td>
+            </tr>
+            <tr>
+              <td>TokenSkip</td><td>0.5</td><td>78.2</td><td>113.05</td><td class="good">3.40s</td><td class="good">0.53</td><td>40.2</td><td>292.17</td><td class="good">9.67s</td><td class="good">0.58</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="muted">
+        读表重点：LC-Prompt 看起来保精度，但几乎没有达到目标压缩率；Truncation 能短，但在 GSM8K 上 0.5 ratio 准确率跌到 7.0%。
+        TokenSkip 的价值在二者之间：牺牲较小精度，换来真正接近目标的压缩率和延迟加速。
+      </p>
+
+      <figure class="fig">
+        <img src="tokenskip_report_assets/crops/table1_llama_results.png" alt="论文 Table 1 原表截图：LLaMA-3.1-8B-Instruct 在 GSM8K 和 MATH-500 上的实验结果。" />
+        <figcaption class="figcap">
+          原论文 Table 1：TokenSkip 和 token-efficient prompt、length-control prompt、truncation 的完整对照。
+        </figcaption>
+      </figure>
+    </section>
+
+    <section id="analysis">
+      <div class="section-head">
+        <span class="kicker">Ablation & Interpretation</span>
+        <h2>为什么它有效：模型学到的是“保留关键关系”，不是机械缩句</h2>
+      </div>
+
+      <div class="three-col">
+        <figure class="fig">
+          <img src="tokenskip_report_assets/crops/fig6_ratio_adherence.png" alt="论文 Figure 6：目标压缩率和实际压缩率的关系。" />
+          <figcaption class="figcap">
+            默认 γ∈{0.5,...,1.0} 时实际比例接近目标；加入 0.3/0.4 后 adherence 变差。
+          </figcaption>
+        </figure>
+        <figure class="fig">
+          <img src="tokenskip_report_assets/crops/fig7_importance_distribution.png" alt="论文 Figure 7：跳过 token 与保留 token 的重要性分布。" />
+          <figcaption class="figcap">
+            被跳过 token 明显偏低重要性，保留 token 偏高重要性，支持“学会跳低价值 token”的解释。
+          </figcaption>
+        </figure>
+        <figure class="fig">
+          <img src="tokenskip_report_assets/crops/fig8_metric_compare.png" alt="论文 Figure 8：不同 token 重要性度量的效果比较。" />
+          <figcaption class="figcap">
+            LLMLingua-2 优于 Selective Context；GPT-4o 作为上界更强但成本高。
+          </figcaption>
+        </figure>
+      </div>
+
+      <div class="two-col">
+        <div>
+          <h3>1. 压缩率有“可学习区间”</h3>
+          <p>
+            论文主实验只覆盖 γ≥0.5，补充实验把 0.3、0.4 加入训练后，实际比例反而更不稳定。
+            一个合理解释是：压得太狠会丢掉训练所需的关键语义，模型看不到足够完整的捷径样本，自然学不稳。
+          </p>
+          <p>
+            这说明 TokenSkip 的可控性不是无限的。它更适合把冗余语言压掉，而不是把复杂推理压成几串数字。
+          </p>
+        </div>
+        <div>
+          <h3>2. 重要性模型决定上限</h3>
+          <p>
+            LLMLingua-2 是一个成本友好的选择，但它不是数学专用模型。论文 Figure 8 中 GPT-4o 压缩数据的表现更好，
+            暗示如果未来能训练数学/代码/科学推理专用的重要性估计器，TokenSkip 的上限还会提高。
+          </p>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <figure class="fig">
+          <img src="tokenskip_report_assets/crops/fig9_budget_compare.png" alt="论文 Figure 9：调整预算和原始预算下 TokenSkip 在 MATH-500 上的表现。" />
+          <figcaption class="figcap">
+            MATH-500 上如果不按 γ 缩小 max_len，而给 TokenSkip 与原模型相同长度预算，γ=0.7/0.8/0.9 甚至超过原始模型。
+          </figcaption>
+        </figure>
+        <div class="callout">
+          <h3>这张图很关键</h3>
+          <p>
+            Figure 9 表明 TokenSkip 不只是“同样答案更短”。在相同 max_len 下，压缩 CoT 格式可能让模型把预算花在更多有效推理上，
+            而不是自然语言填充上。论文报告 γ=0.7、0.8、0.9 相比原模型有 1.3 到 2.6 个百分点的绝对提升。
+          </p>
+          <p>
+            但这也要谨慎解读：如果把目标改成纯准确率最大化，为什么 γ=1.0 不总是最佳？这里可能混合了 length budget、训练正则化和输出格式变化的影响。
+          </p>
+        </div>
+      </div>
+
+      <h3>案例：TokenSkip 更像“压缩语言”，不是砍掉步骤</h3>
+      <div class="case-box">
+        <div class="case-line">
+          <span class="case-label">原始 CoT 片段</span>
+          <p class="compact-text">
+            <span class="deleted">To find the total cost, we need to calculate the cost of each type of pastry and then add them together.</span>
+            Step 1: Calculate the cost of the donuts. <span class="kept">3 × $68 = $204</span>.
+            Step 2: Calculate mini cupcakes. <span class="kept">2 × $80 = $160</span>.
+            Step 3: Calculate cheesecakes. <span class="kept">6 × $55 = $330</span>.
+            Step 4: <span class="kept">$204 + $160 + $330 = $694</span>.
+          </p>
+        </div>
+        <div class="case-line">
+          <span class="case-label">压缩后 CoT 风格</span>
+          <p class="compact-text">
+            Step 1 calculate cost donuts 3 dozen $68 per dozen <span class="kept">3 * $68 = $204</span>.
+            Step 2 mini cupcakes <span class="kept">2 * $80 = $160</span>.
+            Step 3 mini cheesecakes <span class="kept">6 * $55 = $330</span>.
+            Step 4 total <span class="kept">$204 + $160 + $330 = $694</span>.
+          </p>
+        </div>
+      </div>
+      <figure class="fig">
+        <img src="tokenskip_report_assets/crops/fig10_case_study.png" alt="论文 Figure 10：TokenSkip 三个 CoT 压缩案例。" />
+        <figcaption class="figcap">
+          原论文 Figure 10：压缩后仍保留步骤骨架和关键数值/公式，主要删去可恢复的自然语言。
+        </figcaption>
+      </figure>
+    </section>
+
+    <section id="limits">
+      <div class="section-head">
+        <span class="kicker">Critical Reading</span>
+        <h2>我的判断：这是一篇实用主义很强的工作，但真正难题还在长 CoT 场景</h2>
+      </div>
+
+      <div class="judge-grid">
+        <div class="judge">
+          <h3>我认为最强的贡献</h3>
+          <p>
+            TokenSkip 把 CoT 压缩做成了一个可训练、可控、低成本流程。它不依赖昂贵 API 逐条压缩测试输出，
+            也不要求改变模型架构；LoRA + 小型 importance model 足以构造有效训练信号。
+          </p>
+        </div>
+        <div class="judge">
+          <h3>为什么比 prompt 更可信</h3>
+          <p>
+            Prompt 控长度时，模型常常“知道你想短”但不会稳定短到目标比例；LC-Prompt 在目标 0.5 时实际比例仍高于 0.89。
+            TokenSkip 直接用 γ 条件训练输出分布，因此 ratio adherence 更好。
+          </p>
+        </div>
+        <div class="judge warn">
+          <h3>主要局限 1：没有覆盖真正长 CoT 模型</h3>
+          <p>
+            论文动机提到超过 10,000 token 的 CoT 成本，但实验主要是 GSM8K/MATH-500，平均 CoT 多在几百 token。
+            作者也承认未测试 QwQ-32B-Preview 等 long-CoT 模型，以及 Qwen2.5-32B/72B。
+          </p>
+        </div>
+        <div class="judge warn">
+          <h3>主要局限 2：重要性估计器不是数学专用</h3>
+          <p>
+            LLMLingua-2 不是为数学符号、数值依赖和公式变形训练的。它能工作，但可能漏判一些看起来普通、实际关键的 token。
+            对数学和代码推理而言，importance metric 可能是后续提升的最大杠杆。
+          </p>
+        </div>
+        <div class="judge ask">
+          <h3>需要进一步验证的问题</h3>
+          <p>
+            压缩后的 CoT 可恢复性目前主要以案例展示，缺少大规模的 fidelity 指标；同时，压缩输出的可读性下降，
+            如果用户需要审计推理过程，是否需要自动恢复模块仍未充分评估。
+          </p>
+        </div>
+        <div class="judge ask">
+          <h3>部署侧的真实收益还要看 serving 设置</h3>
+          <p>
+            论文报告 batch size 1、单张 3090 的 latency。真实线上系统还会受到 batching、KV cache、采样策略和 tokenizer 的影响。
+            Token 数减少通常会带来收益，但吞吐和端到端延迟需要在生产形态下复测。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="takeaways">
+      <div class="section-head">
+        <span class="kicker">Takeaways</span>
+        <h2>读完这篇论文，应带走四个结论</h2>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <h3>1. CoT 冗余确实存在</h3>
+          <p>
+            数字、公式和实体关系更像“承重墙”；连接词、模板化解释和重复叙述更像“装修层”。
+            TokenSkip 的实验说明，至少在中等长度数学 CoT 中，后者可以大量减少。
+          </p>
+        </div>
+        <div class="card">
+          <h3>2. 可控性来自训练，不来自请求模型自觉</h3>
+          <p>
+            把 γ 写入训练样本，比在 prompt 里说“减少 50%”可靠得多。
+            这也是 TokenSkip 相比 token-efficient prompts 的核心优势。
+          </p>
+        </div>
+        <div class="card">
+          <h3>3. 大模型更适合学 token-level shortcut</h3>
+          <p>
+            Qwen2.5-14B 在 γ=0.6 仍几乎不掉点，3B 则明显更吃力。
+            这符合直觉：越强的模型越能从残缺但关键的符号链中补全推理语义。
+          </p>
+        </div>
+        <div class="card">
+          <h3>4. 下一步应走向长推理和领域重要性模型</h3>
+          <p>
+            如果 TokenSkip 能在 R1/QwQ 类长 CoT、代码推理、多步科学推理上稳定工作，它的实际价值会更大。
+            专用 importance model 可能比继续调 prompt 更值得投入。
+          </p>
+        </div>
+      </div>
+
+      <h3>补充实验给出的泛化信号</h3>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>场景</th>
+              <th>模型/训练</th>
+              <th>关键设置</th>
+              <th>论文报告的现象</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>MATH → GSM8K</td>
+              <td>LLaMA-3.1-8B on MATH</td>
+              <td>OOD math word problems</td>
+              <td>实际比例仍接近目标，但 γ=0.5 时 GSM8K 准确率下降 9.6 个百分点。</td>
+            </tr>
+            <tr>
+              <td>MATH → MMLU-STEM</td>
+              <td>LLaMA-3.1-8B on MATH</td>
+              <td>STEM 多选题</td>
+              <td>γ=0.6 时准确率 59.2，高于原始 58.5；γ=0.5 也仅低 0.4 个百分点。</td>
+            </tr>
+            <tr>
+              <td>CommonsenseQA</td>
+              <td>Qwen2.5-7B/14B</td>
+              <td>常识问答</td>
+              <td>50% CoT token 压缩未造成性能下降；Qwen2.5-14B 在 γ=0.5 时仍为 82.1。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="refs">
+      <div class="section-head">
+        <span class="kicker">Sources</span>
+        <h2>材料来源</h2>
+      </div>
+      <div class="refs">
+        <span>论文原文：<a href="https://arxiv.org/abs/2502.12067">arXiv:2502.12067</a></span>
+        <span>论文代码链接来自 PDF 摘要页：<a href="https://github.com/hemingkx/TokenSkip">https://github.com/hemingkx/TokenSkip</a></span>
+        <span>版式参考页面：<a href="https://syt-nju.github.io/files/visual-reading/nudgerl-self-distillation-rl/">NudgeRL visual reading</a></span>
+        <span>返回导航：<a href="/visual-reading/">Visual Reading</a></span>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <p>
+        生成时间：2026-06-06。图表截图由本地 PDF 渲染裁剪，表格数字来自论文正文与附录。
+      </p>
+    </footer>
+  </main>
+  <div class="lightbox" id="figure-lightbox" aria-hidden="true">
+    <button class="lightbox-close" type="button" aria-label="关闭放大图">×</button>
+    <div class="lightbox-inner">
+      <img alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==" />
+      <div class="lightbox-caption"></div>
+    </div>
+  </div>
+  <script>
+    (() => {
+      const lightbox = document.getElementById("figure-lightbox");
+      const lightboxImage = lightbox.querySelector("img");
+      const lightboxCaption = lightbox.querySelector(".lightbox-caption");
+      const closeButton = lightbox.querySelector(".lightbox-close");
+      const placeholderSrc = lightboxImage.src;
+
+      function openLightbox(img) {
+        const fig = img.closest("figure");
+        const caption = fig ? fig.querySelector("figcaption") : null;
+        lightboxImage.src = img.currentSrc || img.src;
+        lightboxImage.alt = img.alt || "";
+        lightboxCaption.textContent = caption ? caption.textContent.replace("点击图片可放大", "").trim() : "";
+        lightbox.classList.add("open");
+        lightbox.setAttribute("aria-hidden", "false");
+        document.body.style.overflow = "hidden";
+      }
+
+      function closeLightbox() {
+        lightbox.classList.remove("open");
+        lightbox.setAttribute("aria-hidden", "true");
+        lightboxImage.src = placeholderSrc;
+        document.body.style.overflow = "";
+      }
+
+      document.querySelectorAll(".fig img").forEach((img) => {
+        img.addEventListener("click", () => openLightbox(img));
+      });
+
+      closeButton.addEventListener("click", closeLightbox);
+      lightbox.addEventListener("click", (event) => {
+        if (event.target === lightbox) closeLightbox();
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && lightbox.classList.contains("open")) {
+          closeLightbox();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

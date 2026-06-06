@@ -14,4 +14,5 @@ author_profile: true
 - [主页]({{ base_path }}/)
 - [经历]({{ base_path }}/experience/)
 - [项目]({{ base_path }}/projects/)
+- [Visual Reading]({{ base_path }}/visual-reading/)
 - [背景]({{ base_path }}/background/)
